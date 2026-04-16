@@ -1,15 +1,1698 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DAYS - Afet Yönetim Sistemi</title>
-    <style>
-        body, html { margin: 0; padding: 0; height: 100vh; width: 100vw; overflow: hidden; background-color: #121212; }
-        iframe { width: 100%; height: 100%; border: none; }
-    </style>
-</head>
-<body>
-    <iframe src="https://dartpad.dev/embed.html?id=GIST_ID_BURAYA&theme=dark&run=true&split=0&header=false&editor=false"></iframe>
-</body>
-</html>
+// Tek bir main.dart dosyasında birleştirilmiş tüm Flutter kodları.
+import 'package:flutter/material.dart';
+import 'dart:math' as math;
+
+// --- ROLLER ---
+enum KullaniciRolu {
+  ustDuzeyYetkili,
+  yetkili,
+  yonetici,
+  gonullu,
+  vatandas
+}
+
+void main() {
+  runApp(const DaysApp());
+}
+
+class DaysApp extends StatelessWidget {
+  const DaysApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'DAYS - Afet Yönetim Sistemi',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(useMaterial3: true).copyWith(
+        primaryColor: Colors.cyanAccent,
+        scaffoldBackgroundColor: const Color(0xff00020d),
+      ),
+      home: const KayitEkrani(), // Uygulama kayıt ekranı ile başlar.
+    );
+  }
+}
+
+// --- 1. MODÜL: KAYIT EKRANI (AÇILIŞ) ---
+class KayitEkrani extends StatefulWidget {
+  const KayitEkrani({super.key});
+
+  @override
+  State<KayitEkrani> createState() => KayitEkraniState();
+}
+
+class KayitEkraniState extends State<KayitEkrani> {
+  final formKey = GlobalKey<FormState>();
+  final TextEditingController adController = TextEditingController();
+  final TextEditingController soyadController = TextEditingController();
+  final TextEditingController tcController = TextEditingController();
+
+  KullaniciRolu secilenRol = KullaniciRolu.vatandas;
+  bool sozlesmeOnay = false;
+
+  void sistemeGirisYap() {
+    if (!formKey.currentState!.validate()) return;
+    if (!sozlesmeOnay) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Lütfen kullanım koşullarını onaylayın."), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+
+    String tamAd = "${adController.text} ${soyadController.text}";
+    Widget hedef;
+    switch (secilenRol) {
+      case KullaniciRolu.ustDuzeyYetkili:
+        hedef = UstDuzeyDashboard(isim: tamAd);
+        break;
+      case KullaniciRolu.yetkili:
+        hedef = AFADDashboard(isim: tamAd);
+        break;
+      case KullaniciRolu.yonetici:
+        hedef = YoneticiDashboard(isim: tamAd);
+        break;
+      case KullaniciRolu.gonullu:
+        hedef = GonulluDashboard(isim: tamAd);
+        break;
+      case KullaniciRolu.vatandas:
+        hedef = VatandasDashboard(isim: tamAd);
+        break;
+    }
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => hedef));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          // 1. KATMAN: SİBER ARKA PLAN
+          const Positioned.fill(child: CyberWorldBackground()),
+
+          // 2. KATMAN: OKUNABİLİRLİK İÇİN OVERLAY
+          Positioned.fill(child: Container(color: Colors.black.withOpacity(0.5))),
+
+          // 3. KATMAN: FORM İÇERİĞİ
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0),
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    children: [
+                      const Icon(Icons.security, size: 60, color: Colors.cyanAccent),
+                      const SizedBox(height: 10),
+                      const Text('SİSTEME KAYIT',
+                          style: TextStyle(
+                              fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                      const Text('DAYS GLOBAL GÜVENLİK AĞI',
+                          style: TextStyle(color: Colors.cyanAccent, fontSize: 10, letterSpacing: 1.5)),
+                      const SizedBox(height: 30),
+
+                      // Giriş Alanları
+                      Row(
+                        children: [
+                          Expanded(child: buildInput(adController, Icons.person, "Adınız")),
+                          const SizedBox(width: 12),
+                          Expanded(child: buildInput(soyadController, Icons.person_outline, "Soyadınız")),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      buildInput(tcController, Icons.badge, "T.C. / Sicil No", isNum: true),
+                      const SizedBox(height: 15),
+
+                      // YETKİ SEÇİMİ (DROPDOWN)
+                      DropdownButtonFormField<KullaniciRolu>(
+                        value: secilenRol,
+                        dropdownColor: const Color(0xff081333),
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        decoration: inputDecoration(Icons.verified_user, "Yetki Seviyesi"),
+                        items: const [
+                          DropdownMenuItem(value: KullaniciRolu.ustDuzeyYetkili, child: Text("Üst Düzey Yetkili (Asker/Polis)")),
+                          DropdownMenuItem(value: KullaniciRolu.yetkili, child: Text("Yetkili (AFAD/Kızılay)")),
+                          DropdownMenuItem(value: KullaniciRolu.yonetici, child: Text("Yönetici (Eğitimli Personel)")),
+                          DropdownMenuItem(value: KullaniciRolu.gonullu, child: Text("Gönüllü (Saha Yardımı)")),
+                          DropdownMenuItem(value: KullaniciRolu.vatandas, child: Text("Vatandaş (Yerel Halk)")),
+                        ],
+                        onChanged: (v) => setState(() => secilenRol = v!),
+                      ),
+
+                      const SizedBox(height: 15),
+                      buildInput(TextEditingController(), Icons.phone, "Telefon Numarası", prefix: "+90 ", isNum: true),
+                      const SizedBox(height: 15),
+
+                      // Onay Kutusu
+                      CheckboxListTile(
+                        value: sozlesmeOnay,
+                        onChanged: (v) => setState(() => sozlesmeOnay = v!),
+                        title: const Text("Kullanım koşullarını onaylıyorum.", style: TextStyle(fontSize: 11, color: Colors.white70)),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        activeColor: Colors.cyanAccent,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+
+                      const SizedBox(height: 20),
+                      // Buton
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.cyanAccent,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: sistemeGirisYap,
+                          child: const Text("GÖREVE BAŞLA", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text("PENTA FORCE CORE v2.0",
+                          style: TextStyle(fontSize: 10, color: Colors.cyanAccent.withOpacity(0.5))),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildInput(TextEditingController ctrl, IconData icon, String hint, {bool isNum = false, String? prefix}) {
+    return TextFormField(
+      controller: ctrl,
+      keyboardType: isNum ? TextInputType.number : TextInputType.text,
+      validator: (v) => (v == null || v.trim().isEmpty) ? "Bu alan boş bırakılamaz" : null,
+      decoration: inputDecoration(icon, hint).copyWith(prefixText: prefix),
+    );
+  }
+
+  InputDecoration inputDecoration(IconData icon, String hint) {
+    return InputDecoration(
+      prefixIcon: Icon(icon, color: Colors.cyanAccent, size: 20),
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.black54,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.cyanAccent.withOpacity(0.2)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.cyanAccent),
+      ),
+    );
+  }
+}
+
+// --- DASHBOARD'LAR ---
+
+class UstDuzeyDashboard extends StatelessWidget {
+  final String isim;
+  const UstDuzeyDashboard({super.key, required this.isim});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+          title: Text("Komuta: $isim"),
+          backgroundColor: Colors.red[900],
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const MainDashboard())),
+          ),
+          actions: [cikisBtn(context)]),
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        menuKarti(context, "SİSMİK ANALİZ (İBB 3D)", Icons.map, Colors.blue, const SismikHaritaSayfasi()),
+        menuKarti(context, "DRONE FİLOSU KOMUTA", Icons.settings_remote, Colors.red, const DroneKomutaSayfasi()),
+        GorevKarti("Stratejik Operasyon", "Tüm bölge hareketliliği koordine ediliyor.", Icons.analytics, Colors.blue),
+      ]),
+    );
+  }
+
+  Widget cikisBtn(BuildContext context) => IconButton(
+      icon: const Icon(Icons.logout),
+      onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const KayitEkrani())));
+
+  Widget menuKarti(BuildContext context, String t, IconData i, Color c, Widget page) {
+    return Card(
+      color: Colors.white.withOpacity(0.05),
+      shape: RoundedRectangleBorder(side: BorderSide(color: c.withOpacity(0.3)), borderRadius: BorderRadius.circular(15)),
+      margin: const EdgeInsets.only(bottom: 20),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(15),
+        leading: Icon(i, color: c, size: 35),
+        title: Text(t, style: const TextStyle(fontWeight: FontWeight.bold)),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => page)),
+      ),
+    );
+  }
+}
+
+class AFADDashboard extends StatefulWidget {
+  final String isim;
+  const AFADDashboard({super.key, required this.isim});
+
+  @override
+  State<AFADDashboard> createState() => AFADDashboardState();
+}
+
+class AFADDashboardState extends State<AFADDashboard> {
+  String? secilenBirim; // null ise seçim ekranı, dolu ise operasyon ekranı görünür
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          secilenBirim == null ? "YETKİLİ BİRİM SEÇİMİ" : "$secilenBirim OPERASYON MERKEZİ",
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00BFFF)),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        actions: [
+          if (secilenBirim != null)
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.redAccent),
+              onPressed: () => setState(() => secilenBirim = null),
+              tooltip: "Birime Dön",
+            ),
+          IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const MainDashboard())),
+          ),
+        ],
+      ),
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: secilenBirim == null ? buildBirimSecimi() : buildOperasyonPaneli(),
+      ),
+    );
+  }
+
+  Widget buildBirimSecimi() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.admin_panel_settings, size: 80, color: Color(0xFF00BFFF)),
+          const SizedBox(height: 10),
+          const Text("Giriş Yapılacak Birimi Seçin", style: TextStyle(fontSize: 18, color: Colors.white70)),
+          const SizedBox(height: 40),
+          birimButonu("AFAD Arama Kurtarma", Icons.search, Colors.orange, "AFAD"),
+          const SizedBox(height: 20),
+          birimButonu("Kızılay Sağlık Ekibi", Icons.medical_services, Colors.redAccent, "KIZILAY"),
+        ],
+      ),
+    );
+  }
+
+  Widget birimButonu(String ad, IconData ikon, Color renk, String kod) {
+    return InkWell(
+      onTap: () => setState(() => secilenBirim = kod),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 300,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 25),
+        decoration: BoxDecoration(
+          color: renk.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: renk.withOpacity(0.5), width: 2),
+        ),
+        child: Row(
+          children: [
+            Icon(ikon, color: renk, size: 30),
+            const SizedBox(width: 15),
+            Text(ad, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildOperasyonPaneli() {
+    bool isAfad = secilenBirim == "AFAD";
+
+    return Column(
+      children: [
+        // DİNAMİK HARİTA ALANI
+        Container(
+          height: 250,
+          margin: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.24), // Fixed: Changed Colors.black24 to Colors.black.withOpacity(0.24)
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(color: const Color(0xFF00BFFF).withOpacity(0.3)),
+          ),
+          child: Stack(
+            children: [
+              const Center(child: Text("SİBER HARİTA VERİSİ", style: TextStyle(color: Colors.white12, letterSpacing: 2))),
+              // Seçilen birime göre harita üzerindeki işaretçiler değişir
+              if (isAfad) ...[
+                haritaPin(40, 100, "Termal Canlı Sinyali", Colors.red),
+                haritaPin(130, 220, "Ses Tespit Noktası", Colors.orange),
+              ] else ...[
+                haritaPin(80, 150, "Enkazdan Çıkarılan Hasta", Colors.greenAccent),
+                haritaPin(160, 60, "Sağlık Çadırı / Sahra Hastanesi", Colors.blueAccent),
+              ],
+            ],
+          ),
+        ),
+
+        // GÖREV VE HABERLEŞME LİSTESİ
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            children: [
+              // Birime özel açılır menü
+              ExpansionTile(
+                initiallyExpanded: true,
+                iconColor: const Color(0xFF00BFFF),
+                title: Text(isAfad ? "Arama Kurtarma Sektörleri" : "Tıbbi Müdahale Çizelgesi",
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF00BFFF))),
+                leading: Icon(isAfad ? Icons.radar : Icons.local_hospital),
+                children: [
+                  detaySatiri("Bölge A-1", isAfad ? "Termal tarama devam ediyor." : "Sağlık çadırı kurulumu tamam."),
+                  detaySatiri("Bölge C-4", isAfad ? "Sismik dinleme cihazı aktif." : "Ambulans sevki bekleniyor."),
+                ],
+              ),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 10),
+              const Text("BİRİM İÇİ HABERLEŞME (ŞİFRELİ)", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 10),
+              buildMesajlasmaKutusu(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget haritaPin(double t, double l, String etiket, Color renk) {
+    return Positioned(
+      top: t,
+      left: l,
+      child: Column(
+        children: [
+          Icon(Icons.location_on, color: renk, size: 30),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+            child: Text(etiket, style: const TextStyle(fontSize: 10, color: Colors.white)),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget detaySatiri(String baslik, String aciklama) {
+    return ListTile(
+      title: Text(baslik, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      subtitle: Text(aciklama, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+      trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+    );
+  }
+
+  Widget buildMesajlasmaKutusu() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(left: 15),
+              child: TextField(
+                decoration: InputDecoration(hintText: "Mesajınızı yazın...", border: InputBorder.none, hintStyle: TextStyle(fontSize: 14)),
+              ),
+            ),
+          ),
+          IconButton(onPressed: () {}, icon: const Icon(Icons.send, color: Color(0xFF00BFFF))),
+        ],
+      ),
+    );
+  }
+}
+
+class YoneticiDashboard extends StatefulWidget {
+  final String isim;
+  const YoneticiDashboard({super.key, required this.isim});
+
+  @override
+  State<YoneticiDashboard> createState() => YoneticiDashboardState();
+}
+
+class YoneticiDashboardState extends State<YoneticiDashboard> {
+  bool navigasyonAktif = false;
+  String hedefNoktasi = "Enkaz Bölgesi A-4";
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Saha Yönetim: ${widget.isim}",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const MainDashboard())),
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // --- 1. HARİTA PROTOTİPİ ---
+            buildHaritaAlani(),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text("⚠️ Harita Modülü Geliştirilme Aşamasındadır",
+                  style: TextStyle(fontSize: 10, color: Colors.white24, fontStyle: FontStyle.italic)),
+            ),
+
+            // --- 2. LOJİSTİK DESTEK ARAÇLARI ---
+            buildLojistikListesi(),
+
+            // --- 3. SAHA RAPORLAMA VE EKİP ÇAĞRISI ---
+            buildSahaRaporlama(),
+
+            const SizedBox(height: 30),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildHaritaAlani() {
+    return Container(
+      height: 300,
+      margin: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.black38,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
+      ),
+      child: Stack(
+        children: [
+          const Center(child: Text("STRATEJİK KONUMLANDIRMA",
+              style: TextStyle(color: Colors.white10, fontSize: 12, letterSpacing: 1.2))),
+
+          // Personel Kendi Konumu
+          haritaPin(140, 100, "KONUMUNUZ", Colors.blue, Icons.person_pin_circle),
+
+          // Navigasyon Çizgisi Simülasyonu
+          if (navigasyonAktif)
+            Positioned(
+              top: 90,
+              left: 120,
+              child: RotationTransition(
+                turns: const AlwaysStoppedAnimation(-15 / 360),
+                child: Container(width: 80, height: 2, color: Colors.orangeAccent.withOpacity(0.4)),
+              ),
+            ),
+
+          // Müdahale Gereken Veri Konumu
+          haritaPin(60, 180, hedefNoktasi, Colors.red, Icons.warning_amber),
+
+          // Lojistik Araç Konumları
+          haritaPin(210, 60, "GIDA TIR", Colors.green, Icons.local_shipping),
+          haritaPin(230, 220, "İLAÇ ARACI", Colors.cyan, Icons.medical_information),
+        ],
+      ),
+    );
+  }
+
+  Widget buildLojistikListesi() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10, horizontal: 5),
+            child: Text("📦 LOJİSTİK ARAÇ TAKİBİ",
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.cyanAccent, letterSpacing: 1.1)),
+          ),
+          lojistikKart("Su & Gıda Nakliye", "Plaka: 34 DAYS 01", "Yük: 5000 Adet Paketli Gıda", Colors.green),
+          lojistikKart("Tıbbi Destek Ünitesi", "Plaka: 06 DAYS 99", "Yük: İlk Yardım Seti & Serum", Colors.cyan),
+          lojistikKart("Barınma Sevkiyatı", "Plaka: 35 DAYS 45", "Yük: 100 Adet Kışlık Çadır", Colors.orange),
+        ],
+      ),
+    );
+  }
+
+  Widget buildSahaRaporlama() {
+    return Container(
+      margin: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.red.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.red.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: [
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.campaign, color: Colors.redAccent),
+              SizedBox(width: 10),
+              Text("KRİTİK SAHA RAPORLAMA", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            "Çok sayıda sivilin bulunduğu ağır enkaz tespiti. Müdahale yetkisini AFAD ve KIZILAY ekiplerine devretmek için butonları kullanın.",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.white60),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[900], foregroundColor: Colors.white),
+                  onPressed: () => ekipCagrisiMesaji("AFAD Arama Kurtarma"),
+                  child: const Text("AFAD ÇAĞIR", style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red[900], foregroundColor: Colors.white),
+                  onPressed: () => ekipCagrisiMesaji("KIZILAY Sağlık"),
+                  child: const Text("KIZILAY ÇAĞIR", style: TextStyle(fontSize: 12)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget haritaPin(double t, double l, String etiket, Color renk, IconData ikon) {
+    return Positioned(
+      top: t,
+      left: l,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            navigasyonAktif = true;
+            hedefNoktasi = etiket;
+          });
+        },
+        child: Column(
+          children: [
+            Icon(ikon, color: renk, size: 28),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(4)),
+              child: Text(etiket, style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget lojistikKart(String baslik, String plaka, String yuk, Color renk) {
+    return Card(
+      color: Colors.white.withOpacity(0.02),
+      margin: const EdgeInsets.only(bottom: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: renk.withOpacity(0.2),
+          child: Icon(Icons.local_shipping, color: renk, size: 20),
+        ),
+        title: Text(baslik, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        subtitle: Text("$plaka\n$yuk", style: const TextStyle(fontSize: 11, color: Colors.white54)),
+        trailing: const Icon(Icons.gps_fixed, size: 18, color: Colors.white24),
+        isThreeLine: true,
+      ),
+    );
+  }
+
+  void ekipCagrisiMesaji(String birim) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF0A192F),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15), side: const BorderSide(color: Colors.redAccent)),
+        title: Text("$birim Bildirimi"),
+        content: Text("Mevcut konumunuzdaki toplu enkaz verisi $birim merkezine iletildi. Koordinasyon başlatılıyor."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text("TAMAM", style: TextStyle(color: Colors.cyanAccent)))
+        ],
+      ),
+    );
+  }
+}
+
+class GonulluDashboard extends StatefulWidget {
+  final String isim;
+  const GonulluDashboard({super.key, required this.isim});
+
+  @override
+  State<GonulluDashboard> createState() => GonulluDashboardState();
+}
+
+class GonulluDashboardState extends State<GonulluDashboard> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Gönüllü: ${widget.isim}",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2DE2E2))),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const MainDashboard())),
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // --- 1. HARİTA PROTOTİPİ ---
+            buildGonulluHaritasi(),
+            const Text("📍 Canlı Saha Verileri (Geliştirilme Aşamasında)", style: TextStyle(fontSize: 10, color: Colors.white24)),
+
+            const SizedBox(height: 20),
+
+            // --- 2. YARDIM TIRLARI (LOJİSTİK) ---
+            sectionBaslik("📦 GELEN YARDIM TIRLARI", const Color(0xFF2DE2E2)),
+            buildYardimTirlari(),
+
+            // --- 3. REFAKAT VE BİLGİ GİRİŞİ ---
+            sectionBaslik("🆘 ACİL REFAKAT VE BİLGİ GİRİŞİ", Colors.purpleAccent),
+            buildSahaAksiyonlari(),
+
+            // --- 4. GÖNÜLLÜ HABERLEŞME ---
+            sectionBaslik("💬 GÖNÜLLÜ HABERLEŞME HATTI", Colors.blueAccent),
+            buildMesajlasmaHatti(),
+
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget sectionBaslik(String metin, Color renk) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(metin, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: renk, letterSpacing: 1.1)),
+      ),
+    );
+  }
+
+  Widget buildGonulluHaritasi() {
+    return Container(
+      height: 280,
+      margin: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: const Color(0xFF2DE2E2).withOpacity(0.2)),
+      ),
+      child: Stack(
+        children: [
+          const Center(child: Icon(Icons.map, size: 80, color: Colors.white10)),
+          haritaPin(50, 60, "Su/Gıda Tırı", const Color(0xFF2DE2E2), Icons.local_shipping),
+          haritaPin(180, 220, "Refakat Gerekli", Colors.purpleAccent, Icons.volunteer_activism),
+          haritaPin(100, 150, "Siz", Colors.blueAccent, Icons.my_location),
+          haritaPin(210, 80, "Giysi Yardımı", Colors.orangeAccent, Icons.inventory_2),
+        ],
+      ),
+    );
+  }
+
+  Widget buildYardimTirlari() {
+    return Column(
+      children: [
+        gonulluKart("Kızılay Gıda Tırı", "Konum: C Meydanı", "Durum: Dağıtım Başladı", const Color(0xFF2DE2E2)),
+        gonulluKart("İHH Su Tankeri", "Konum: Gençlik Parkı", "Durum: Personel Bekleniyor", Colors.blueAccent),
+      ],
+    );
+  }
+
+  Widget buildSahaAksiyonlari() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.02),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.person_search, color: Colors.purpleAccent),
+            title: const Text("Yeni Enkazdan Çıkan Takibi", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            subtitle: const Text("Tıbbi müdahale sonrası yanlarında refakatçi durun."),
+            trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+            onTap: () {},
+          ),
+          const Divider(color: Colors.white10),
+          ListTile(
+            leading: const Icon(Icons.add_location_alt, color: Colors.orangeAccent),
+            title: const Text("Depremzede Bilgi Girişi", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            subtitle: const Text("Sistemde olmayan yeni bir vaka bildirin."),
+            onTap: () => bilgiGirisiDialog(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildMesajlasmaHatti() {
+    return Container(
+      margin: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.03), borderRadius: BorderRadius.circular(15)),
+      child: Row(
+        children: [
+          const Expanded(
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: "Buradayım, desteğe hazırım...",
+                hintStyle: TextStyle(fontSize: 13, color: Colors.white24),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 10),
+              ),
+            ),
+          ),
+          IconButton(onPressed: () {}, icon: const Icon(Icons.send, color: Color(0xFF2DE2E2))),
+        ],
+      ),
+    );
+  }
+
+  Widget haritaPin(double t, double l, String ad, Color renk, IconData ikon) {
+    return Positioned(
+      top: t,
+      left: l,
+      child: Column(
+        children: [
+          Icon(ikon, color: renk, size: 26),
+          Text(ad, style: const TextStyle(fontSize: 8, color: Colors.white70)),
+        ],
+      ),
+    );
+  }
+
+  Widget gonulluKart(String baslik, String alt, String durum, Color renk) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
+      child: Card(
+        color: Colors.white.withOpacity(0.03),
+        child: ListTile(
+          leading: Icon(Icons.local_shipping, color: renk),
+          title: Text(baslik, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          subtitle: Text("$alt | $durum", style: const TextStyle(fontSize: 12)),
+          trailing: const Icon(Icons.map, size: 18, color: Colors.white24),
+        ),
+      ),
+    );
+  }
+
+  void bilgiGirisiDialog() {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: const Color(0xFF0A192F),
+        title: const Text("Depremzede Bildir"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            TextField(decoration: InputDecoration(labelText: "İsim / Tanım")),
+            TextField(decoration: InputDecoration(labelText: "İhtiyaç (Gıda, İlaç vb.)")),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text("İptal")),
+          ElevatedButton(onPressed: () => Navigator.pop(c), child: const Text("Gönder")),
+        ],
+      ),
+    );
+  }
+}
+
+class VatandasDashboard extends StatefulWidget {
+  final String isim;
+  const VatandasDashboard({super.key, required this.isim});
+
+  @override
+  State<VatandasDashboard> createState() => VatandasDashboardState();
+}
+
+class VatandasDashboardState extends State<VatandasDashboard> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Vatandaş: ${widget.isim}",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF4CAF50))),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const MainDashboard())),
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // --- 1. GÜVENLİ ALAN VE SOS RADARI ---
+            buildVatandasHaritasi(),
+            const Text("📍 En Yakın Güvenli Toplanma Alanları İşaretlenmiştir", style: TextStyle(fontSize: 10, color: Colors.white24)),
+
+            const SizedBox(height: 20),
+
+            // --- 2. ACİL DURUM BUTONLARI ---
+            buildAcilServisButonlari(),
+
+            // --- 3. BİLGİ VE DURUM KARTLARI ---
+            sectionBaslik("📢 GÜNCEL DURUM BİLGİSİ", const Color(0xFF4CAF50)),
+            buildDurumListesi(),
+
+            // --- 4. HASAR BİLDİRİM ---
+            sectionBaslik("🏚️ HASAR / ENKAZ BİLDİRİMİ", Colors.orangeAccent),
+            buildHasarBildirimKarti(),
+
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget sectionBaslik(String metin, Color renk) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(metin, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: renk, letterSpacing: 1.1)),
+      ),
+    );
+  }
+
+  Widget buildVatandasHaritasi() {
+    return Container(
+      height: 250,
+      margin: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.black26,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.2)),
+      ),
+      child: Stack(
+        children: [
+          const Center(child: Icon(Icons.location_searching, size: 60, color: Colors.white10)),
+          haritaPin(40, 50, "Toplanma Alanı A", Colors.green, Icons.forest),
+          haritaPin(160, 240, "Sahra Hastanesi", Colors.redAccent, Icons.local_hospital),
+          haritaPin(100, 150, "Siz", Colors.blueAccent, Icons.person_pin_circle),
+          haritaPin(180, 60, "Su Dağıtım", Colors.cyan, Icons.water_drop),
+        ],
+      ),
+    );
+  }
+
+  Widget buildAcilServisButonlari() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      child: Row(
+        children: [
+          Expanded(
+            child: sosButonu("ACİL SOS", Colors.red, Icons.sos, () => sosGonder("Yardım talebi iletildi.")),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: sosButonu("GÜVENDEYİM", Colors.green, Icons.check_circle, () => sosGonder("Güvende olduğunuz kaydedildi.")),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget sosButonu(String metin, Color renk, IconData ikon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        decoration: BoxDecoration(
+          color: renk.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: renk.withOpacity(0.5)),
+        ),
+        child: Column(
+          children: [
+            Icon(ikon, color: renk, size: 30),
+            const SizedBox(height: 5),
+            Text(metin, style: TextStyle(fontWeight: FontWeight.bold, color: renk, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildDurumListesi() {
+    return Column(
+      children: [
+        bilgiKarti("Şebeke Suyu", "Kullanılabilir (Kaynatınız)", Icons.waves, Colors.blue),
+        bilgiKarti("Elektrik Durumu", "Kısmi Kesinti Mevcut", Icons.bolt, Colors.orange),
+        bilgiKarti("Hava Durumu", "Gece Boyu Yağış Bekleniyor", Icons.cloudy_snowing, Colors.grey),
+      ],
+    );
+  }
+
+  Widget buildHasarBildirimKarti() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 15),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.orange.withOpacity(0.2)),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.add_a_photo, color: Colors.orangeAccent),
+        title: const Text("Bina Hasarı Bildir", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        subtitle: const Text("Çatlak veya yıkılma durumlarını fotoğraflı iletin."),
+        trailing: const Icon(Icons.chevron_right, color: Colors.white24),
+        onTap: () {},
+      ),
+    );
+  }
+
+  Widget haritaPin(double t, double l, String ad, Color renk, IconData ikon) {
+    return Positioned(
+      top: t,
+      left: l,
+      child: Column(
+        children: [
+          Icon(ikon, color: renk, size: 24),
+          Text(ad, style: const TextStyle(fontSize: 8, color: Colors.white70)),
+        ],
+      ),
+    );
+  }
+
+  Widget bilgiKarti(String baslik, String icerik, IconData ikon, Color renk) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 4),
+      child: Card(
+        color: Colors.white.withOpacity(0.02),
+        child: ListTile(
+          leading: Icon(ikon, color: renk, size: 20),
+          title: Text(baslik, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          subtitle: Text(icerik, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+        ),
+      ),
+    );
+  }
+
+  void sosGonder(String mesaj) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mesaj),
+        backgroundColor: Colors.black87,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+// --- ANA PANEL / DAHSBOARD (UYGULAMA HAKKINDA, MENÜ) ---
+class MainDashboard extends StatelessWidget {
+  const MainDashboard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(size: 40, color: Color(0xFF00BFFF)),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 20),
+            child: Container(
+              width: 70,
+              height: 70,
+              decoration:
+                  BoxDecoration(border: Border.all(color: Colors.white12), borderRadius: BorderRadius.circular(10)),
+              child: const Center(
+                  child: Text("DAYS\nLOGO", textAlign: TextAlign.center, style: TextStyle(fontSize: 12))),
+            ),
+          )
+        ],
+      ),
+      drawer: const AppDrawer(),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 25.0, vertical: 20),
+        child: Column(
+          children: [
+            const Text("DAYS", style: TextStyle(fontSize: 70, fontWeight: FontWeight.bold, letterSpacing: 8)),
+            const Text('"Afet Yönetim ve Analiz Sistemi"',
+                style: TextStyle(fontSize: 20, fontStyle: FontStyle.italic, color: Colors.grey)),
+            const SizedBox(height: 20),
+            const Text(
+              "“Yarınlarımız Enkaz Altında Kalmasın.”",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF00BFFF)),
+            ),
+            const SizedBox(height: 60),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text("DAYS bize ne sunuyor?", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 25),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              mainAxisSpacing: 25,
+              crossAxisSpacing: 25,
+              childAspectRatio: 0.9,
+              children: [
+                buildInfoBlock("Tam Zamanlı Veri", "Anlık siber veri akışı. Sensörlerden gelen mesafe, ışık ve konum verileri.",
+                    Icons.sensors),
+                buildInfoBlock("LoRaWAN Yapısı", "İnternetsiz iletişim hattı. 15 km'ye varan telsiz haberleşmesi.",
+                    Icons.settings_input_antenna),
+                buildInfoBlock("Kesintisiz Bağlantı", "Halkla dijital köprü. Donanım onaylı veri iletimi.", Icons.hub),
+                buildInfoBlock("Havadan Gözlem", "Termal analiz desteği. Drone ile yaşam belirtisi tespiti.", Icons.visibility),
+              ],
+            ),
+            const SizedBox(height: 60),
+            const PlaceholderBox(height: 300, text: "6 ŞUBAT DEPREM GÖRSELİ"),
+            const SizedBox(height: 40),
+            const Text("TEMEL AMACIMIZ", style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF00BFFF))),
+            const SizedBox(height: 20),
+            const Text(
+              "Ulusal ve uluslararası basında büyük ses getiren felaketlere karşı hazırlıklı olmayı amaçlıyoruz. Beklenen Marmara depremi için teknolojiyi kullanarak can kaybını minimize etmek en temel görevimizdir.",
+              textAlign: TextAlign.justify,
+              style: TextStyle(fontSize: 20, height: 1.6),
+            ),
+            const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildInfoBlock(String title, String desc, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: const Color(0xFF00BFFF).withOpacity(0.5), width: 3),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: const Color(0xFF00BFFF), size: 50),
+          const SizedBox(height: 15),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF00BFFF))),
+          const SizedBox(height: 10),
+          Text(desc, textAlign: TextAlign.center, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+        ],
+      ),
+    );
+  }
+}
+
+// --- YAN MENÜ (DRAWER) ---
+class AppDrawer extends StatelessWidget {
+  const AppDrawer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      backgroundColor: const Color(0xFF0A192F),
+      child: Column(
+        children: [
+          const DrawerHeader(
+            decoration: BoxDecoration(color: Color(0xFF00BFFF)),
+            child: Center(child: Text("DAYS MENU", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: Colors.black))),
+          ),
+          ListTile(
+            leading: const Icon(Icons.home, color: Color(0xFF00BFFF)),
+            title: const Text("Anasayfa"),
+            onTap: () => Navigator.pop(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.app_registration, color: Color(0xFF00BFFF)),
+            title: const Text("Kayıt Ol / Göreve Başla"),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (c) => const KayitEkrani()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.auto_awesome, color: Colors.cyanAccent),
+            title: const Text("Yapay Zeka Yardımı"),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (c) => const AiAssistantEkrani()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings_input_component, color: Colors.cyanAccent),
+            title: const Text("Sistem Ayarları"),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen()));
+            },
+          ),
+          const Spacer(),
+          const PlaceholderBox(height: 80, text: "PENTA FORCE"),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+// --- YARDIMCI BİLEŞENLER ---
+
+class GorevKarti extends StatelessWidget {
+  final String baslik, icerik;
+  final IconData ikon;
+  final Color renk;
+  const GorevKarti(this.baslik, this.icerik, this.ikon, this.renk, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: CircleAvatar(backgroundColor: renk.withOpacity(0.1), child: Icon(ikon, color: renk)),
+        title: Text(baslik, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text(icerik),
+      ),
+    );
+  }
+}
+
+class PlaceholderBox extends StatelessWidget {
+  final double height;
+  final String text;
+  const PlaceholderBox({super.key, required this.height, required this.text});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: height,
+      decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(15)),
+      child: Center(child: Text(text, style: const TextStyle(color: Colors.white38))),
+    );
+  }
+}
+
+// --- CUSTOM PAINTER: SİBER ARKA PLAN ---
+class CyberWorldBackground extends StatelessWidget {
+  const CyberWorldBackground({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: CyberPainter());
+  }
+}
+
+class CyberPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final random = math.Random(42);
+
+    final bgPaint = Paint()
+      ..shader = const RadialGradient(
+        center: Alignment.center,
+        radius: 1.2,
+        colors: [Color(0xFF081333), Color(0xFF000108)],
+      ).createShader(rect);
+    canvas.drawRect(rect, bgPaint);
+
+    final nodePaint = Paint()..color = Colors.cyanAccent.withOpacity(0.5);
+    final linePaint = Paint()..color = Colors.cyanAccent.withOpacity(0.15)..strokeWidth = 0.5;
+
+    List<Offset> nodes = List.generate(50, (i) => Offset(random.nextDouble() * size.width, random.nextDouble() * size.height));
+
+    for (int i = 0; i < nodes.length; i++) {
+      for (int j = i + 1; j < nodes.length; j++) {
+        if ((nodes[i] - nodes[j]).distance < size.width * 0.4) {
+          canvas.drawLine(nodes[i], nodes[j], linePaint);
+        }
+      }
+      canvas.drawCircle(nodes[i], 1.5, nodePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter old) => false;
+}
+
+// --- SİSMİK ANALİZ / HARİTA ---
+class SismikHaritaSayfasi extends StatelessWidget {
+  const SismikHaritaSayfasi({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("İBB 3D SİSMİK VERİ")),
+      body: Stack(
+        children: [
+          InteractiveViewer(
+            child: Stack(
+              children: [
+                // Arka plan simülasyonu
+                Container(color: Colors.black, width: double.infinity, height: double.infinity),
+                const Center(child: Opacity(opacity: 0.3, child: Icon(Icons.map, size: 300, color: Colors.blue))),
+                ...List.generate(
+                    5,
+                    (i) => Positioned(
+                          top: 100.0 + math.Random().nextInt(300),
+                          left: 50.0 + math.Random().nextInt(250),
+                          child: const Icon(Icons.location_on, color: Colors.redAccent),
+                        )),
+              ],
+            ),
+          ),
+          const Positioned(
+            bottom: 40,
+            left: 20,
+            right: 20,
+            child: Text(
+              "Gerçek zamanlı İBB 3D Harita verisi buraya eklenecektir.\nHenüz acemiyiz, sensör entegrasyonu sürüyor. ;)",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.cyan, fontSize: 12, backgroundColor: Colors.black54),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- DRONE KOMUTA ---
+class DroneKomutaSayfasi extends StatefulWidget {
+  const DroneKomutaSayfasi({super.key});
+  @override
+  State<DroneKomutaSayfasi> createState() => DroneKomutaSayfasiState();
+}
+
+class DroneKomutaSayfasiState extends State<DroneKomutaSayfasi> {
+  bool termal = false;
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("DRONE KAMERA AKIŞI")),
+      body: Column(
+        children: [
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              color: Colors.black,
+              child: Stack(
+                children: [
+                  const Center(child: Icon(Icons.videocam_off, color: Colors.white24, size: 50)),
+                  if (termal) Container(color: Colors.purple.withOpacity(0.3)),
+                  const Positioned(top: 20, left: 20, child: Text("Fatih Bölgesi - Drone 01", style: TextStyle(color: Colors.green))),
+                ],
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(25),
+            color: const Color(0xFF0D1B2A),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(onPressed: () => setState(() => termal = false), child: const Text("NORMAL")),
+                    ElevatedButton(onPressed: () => setState(() => termal = true), child: const Text("TERMAL")),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  "Kamera akışları ve otonom drone görüntüleri buraya eklenecektir.\nHenüz acemiyiz, görüntü işleme modülü geliştiriliyor. ;)",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white38, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- YAPAY ZEKA YARDIMI EKRANI ---
+class AiAssistantEkrani extends StatefulWidget {
+  const AiAssistantEkrani({super.key});
+
+  @override
+  State<AiAssistantEkrani> createState() => AiAssistantEkraniState();
+}
+
+class AiAssistantEkraniState extends State<AiAssistantEkrani> {
+  final TextEditingController controller = TextEditingController();
+
+  void simulateSend() {
+    if (controller.text.trim().isEmpty) return;
+
+    FocusScope.of(context).unfocus();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.cyanAccent,
+        duration: const Duration(seconds: 2),
+        content: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.black),
+            SizedBox(width: 10),
+            Text(
+              "Bu özellik yakında güncellenecektir.",
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+
+    controller.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("PENTA AI", style: TextStyle(color: Colors.cyanAccent)),
+        backgroundColor: const Color(0xFF0D47A1),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.cyanAccent),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF0D47A1), // Orta Ton Mavi
+              Color(0xFF1976D2), // Parlak Mavi
+              Color(0xFF001529), // Derin Lacivert
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    buildAiBubble(
+                        "Merhaba! Ben Penta AI. Bölgedeki koordinasyon hatalarını en aza indirmek için buradayım. Size nasıl yardımcı olabilirim?"),
+                    buildUserBubble("En yakın lojistik merkezi neresi?"),
+                    buildAiBubble("Mevcut konumunuza 2.4 km mesafede 'Merkez A' deposu bulunmaktadır. Stok durumu: %85 dolu."),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(30),
+                    topRight: Radius.circular(30),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(25),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: Center(
+                          child: TextField(
+                            controller: controller,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: const InputDecoration(
+                              hintText: "Asistana mesaj gönder...",
+                              border: InputBorder.none,
+                              hintStyle: TextStyle(color: Colors.white30),
+                            ),
+                            onSubmitted: (_) => simulateSend(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    GestureDetector(
+                      onTap: simulateSend,
+                      child: const CircleAvatar(
+                        backgroundColor: Colors.cyanAccent,
+                        child: Icon(Icons.send, color: Colors.black),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildAiBubble(String text) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 15),
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: const BorderRadius.only(
+            topRight: Radius.circular(20),
+            bottomRight: Radius.circular(20),
+            bottomLeft: Radius.circular(20),
+          ),
+          border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
+        ),
+        child: Text(text, style: const TextStyle(fontSize: 14)),
+      ),
+    );
+  }
+
+  Widget buildUserBubble(String text) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 15, left: 50),
+        padding: const EdgeInsets.all(15),
+        decoration: const BoxDecoration(
+          color: Color(0xFF1976D2),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            bottomLeft: Radius.circular(20),
+            bottomRight: Radius.circular(20),
+          ),
+        ),
+        child: Text(text, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+}
+
+// --- SİSTEM AYARLARI EKRANI ---
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => SettingsScreenState();
+}
+
+class SettingsScreenState extends State<SettingsScreen> {
+  bool locationPermission = true;
+  bool micPermission = false;
+  bool notificationPermission = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('SİSTEM AYARLARI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.cyanAccent),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF000428), Color(0xFF004e92)],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    sectionTitle("Erişim ve Cihaz İzinleri"),
+                    buildSwitchTile(
+                      Icons.location_on,
+                      "Konum İzinleri",
+                      "Koordinasyon doğruluğu için gereklidir.",
+                      locationPermission,
+                      (val) => setState(() => locationPermission = val),
+                    ),
+                    buildSwitchTile(
+                      Icons.mic,
+                      "Mikrofon İzinleri",
+                      "Sesli bildirim ve komutlar için.",
+                      micPermission,
+                      (val) => setState(() => micPermission = val),
+                    ),
+                    buildSwitchTile(
+                      Icons.notifications_active,
+                      "Bildirim İzinleri",
+                      "Acil durum uyarılarını kaçırmayın.",
+                      notificationPermission,
+                      (val) => setState(() => notificationPermission = val),
+                    ),
+                    const SizedBox(height: 24),
+                    sectionTitle("Kurumsal Bilgiler"),
+                    buildInfoTile(
+                        context,
+                        Icons.privacy_tip,
+                        "Gizlilik Politikası",
+                        "Veri işleme ve güvenlik esasları",
+                        "Gizlilik Politikası",
+                        "Uygulamamız, deprem sonrası koordinasyonun hızlı sağlanması amacıyla yalnızca gerekli verileri işlemektedir. Konum verileriniz ve kişisel bilgileriniz uçtan uca şifrelenmekte ve sadece yetkili birimlerle koordinasyon çerçevesinde paylaşılmaktadır. Penta Force olarak verilerinizin üçüncü şahıslara ticari amaçla aktarılmayacağını taahhüt ederiz."),
+                    buildInfoTile(
+                        context,
+                        Icons.info_outline,
+                        "Hakkımızda",
+                        "Proje amacı ve Penta Force ekibi",
+                        "Penta Force Hakkında",
+                        "Bu proje deprem sonrası koordinasyonu sağlamak için Penta Force tarafından yapılmıştır. Hedefimiz iyi niyetli yapılan ancak kötü sonuçlar doğuran hataları en aza indirebilmektir. Uygulamamız henüz geliştirme aşamasındadır. Anlayışınız için teşekkür ederiz.\n\nPenta Force Ekibi"),
+                    const SizedBox(height: 40),
+                    const Center(
+                      child: Text(
+                        "v2.0.4 - Penta Force Global",
+                        style: TextStyle(color: Colors.white24, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, bottom: 8, top: 16),
+      child: Text(title.toUpperCase(),
+          style: const TextStyle(color: Colors.cyanAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget buildSwitchTile(
+      IconData icon, String title, String subtitle, bool value, Function(bool) onChanged) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: SwitchListTile(
+        secondary: Icon(icon, color: Colors.cyanAccent),
+        title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+        value: value,
+        activeColor: Colors.cyanAccent,
+        onChanged: onChanged,
+      ),
+    );
+  }
+
+  Widget buildInfoTile(BuildContext context, IconData icon, String title, String subtitle, String dialogTitle,
+      String content) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.cyanAccent),
+        title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white54)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white24),
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF001F3F),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Text(dialogTitle, style: const TextStyle(color: Colors.cyanAccent)),
+              content: SingleChildScrollView(child: Text(content, style: const TextStyle(height: 1.5))),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Kapat", style: TextStyle(color: Colors.cyanAccent)),
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
